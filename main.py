@@ -35,8 +35,8 @@ def search_rakuten():
     }
     try:
         res = requests.get(url, params=params, timeout=10)
+        print(f"楽天APIステータス: {res.status_code}")
         if res.status_code != 200:
-            print(f"楽天APIエラー: {res.status_code}")
             return
         items = res.json().get('Items', [])
         print(f"取得件数: {len(items)}件")
