@@ -1,5 +1,4 @@
 import html
-import json
 import re
 import urllib.parse
 import requests
@@ -29,8 +28,8 @@ def search_rakuten():
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+        "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
     }
 
     try:
@@ -40,49 +39,45 @@ def search_rakuten():
             return
 
         page_text = res.text
-        items = []
+        
+        # 1. ページ内にある「https://item.rakuten.co.jp/...」形式のURLを網羅的に全抽出
+        raw_urls = re.findall(r'https?://item\.rakuten\.co\.jp/[a-zA-Z0-9_\-]+/[a-zA-Z0-9_\-]+/?', page_text)
+        
+        # 2. ショップトップ以外の個別商品URLのみに絞り込み・重複除外
+        unique_urls = []
+        for u in raw_urls:
+            clean_u = u.rstrip("/")
+            # ショップトップURLを除外（/shopname/itemid の2階層になっているもの）
+            parts = clean_u.replace("https://item.rakuten.co.jp/", "").split("/")
+            if len(parts) >= 2 and clean_u not in unique_urls:
+                unique_urls.append(clean_u)
 
-        # 1. 楽天の埋め込みNext.js JSONデータを抽出
-        next_data_match = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', page_text)
-        if next_data_match:
-            try:
-                data = json.loads(next_data_match.group(1))
-                page_props = data.get("props", {}).get("pageProps", {})
-                raw_items = page_props.get("items", []) or page_props.get("searchResult", {}).get("items", [])
-                for it in raw_items:
-                    title = it.get("itemName") or it.get("title") or ""
-                    item_url = it.get("itemUrl") or it.get("url") or ""
-                    price = it.get("itemPrice") or it.get("price") or ""
-                    if title and item_url:
-                        items.append({"title": title, "url": item_url, "price": price})
-            except Exception as json_err:
-                print(f"JSON解析エラー: {json_err}")
+        print(f"抽出商品URL件数: {len(unique_urls)}件")
 
-        # 2. JSONから取得できなかった場合のテキストパターン抽出（フォールバック）
-        if not items:
-            raw_data = re.findall(r'\{[^{}]*"itemUrl"\s*:\s*"([^"]+)"[^{}]*"itemName"\s*:\s*"([^"]+)"[^{}]*\}', page_text)
-            for item_url, title_escaped in raw_data:
-                try:
-                    title = title_escaped.encode('utf-8').decode('unicode-escape')
-                except Exception:
-                    title = title_escaped
-                items.append({"title": title, "url": item_url, "price": ""})
+        if not unique_urls:
+            print("商品URLが見つかりませんでした")
+            return
 
-        print(f"抽出商品件数: {len(items)}件")
-
-        # 3. 判定とDiscord通知
-        for item in items:
-            title = item["title"]
-            item_url = item["url"]
-            price = item.get("price", "")
+        # 3. 最新商品の判定とDiscord通知
+        for item_url in unique_urls:
+            # ページ内から該当URL近辺のタイトル文字列を抽出（見つからない場合は初期タイトル）
+            escaped_url = re.escape(item_url)
+            match = re.search(rf'{escaped_url}[^>]*?>([\s\S]*?)</a>', page_text)
+            
+            title = ""
+            if match:
+                title = re.sub(r'<[^>]+>', '', match.group(1)).strip()
+                title = html.unescape(title)
+            
+            if not title or len(title) < 5:
+                title = "【楽天新着】ルイヴィトン モノグラム スピーディ"
 
             if any(word in title for word in EXCLUDE_WORDS):
                 continue
 
-            price_str = f"\n【価格】{price:,}円" if isinstance(price, int) and price > 0 else ""
-            msg = f"@everyone\n【楽天・新着】🔥本命スピーディ\n【品名】{title}{price_str}\n{item_url}"
+            msg = f"@everyone\n【楽天・新着】🔥本命スピーディ\n【品名】{title}\n{item_url}"
             send_discord(msg)
-            print("Discordへ新着通知を送信完了")
+            print(f"Discordへ送信完了: {item_url}")
             break
 
     except Exception as e:
