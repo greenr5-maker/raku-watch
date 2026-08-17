@@ -1,19 +1,17 @@
-import time
+import urllib.parse
+import xml.etree.ElementTree as ET
 import requests
 
-RAKUTEN_APP_ID = "1068355966231154319"
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1468599693003980893/f88tz5FEhzgM5Yzo5IUzOk2NvJ5nDa1PxmDwALHeV7IhKMl_TDrDNsyKSkv31jrW9jVr"
 
-TARGET = {
-    "keyword": "ヴィトン モノグラム スピーディ",
-    "minPrice": 25000,
-    "maxPrice": 60000
-}
+KEYWORD = "ヴィトン モノグラム スピーディ"
+MIN_PRICE = 25000
+MAX_PRICE = 60000
 
 EXCLUDE_WORDS = [
-    "スタンプ", "印鑑", "はんこ", "インク", "リング", "指輪", "ネックレス", 
-    "時計", "ミニチュア", "空箱", "ミニポシェット", "ミニラン", "エベヌ", 
-    "チャーム", "アクセソワール"
+    "スピーディ40", "スタンプ", "印鑑", "はんこ", "インク", "リング", 
+    "指輪", "ネックレス", "時計", "ミニチュア", "空箱", "ミニポシェット", 
+    "ミニラン", "エベヌ", "チャーム", "アクセソワール"
 ]
 
 def send_discord(msg):
@@ -23,46 +21,41 @@ def send_discord(msg):
     except Exception as e:
         print(f"Discord送信エラー: {e}")
 
-def search_rakuten():
-    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    }
-    params = {
-        "applicationId": RAKUTEN_APP_ID,
-        "keyword": TARGET["keyword"],
-        "minPrice": TARGET["minPrice"],
-        "maxPrice": TARGET["maxPrice"],
-        "sort": "+updateTimestamp",
-        "format": "json"
-    }
+def check_rakuten_rss():
+    encoded_kw = urllib.parse.quote(KEYWORD)
+    # 楽天市場の公式新着RSSフィード（価格帯・新着ソート指定）
+    rss_url = f"https://rss.rakuten.co.jp/search/item/all/?keyword={encoded_kw}&min={MIN_PRICE}&max={MAX_PRICE}&sort=1"
     
-    # 503対策：最大3回まで再試行
-    for attempt in range(3):
-        try:
-            res = requests.get(url, params=params, headers=headers, timeout=10)
-            print(f"楽天APIステータス (試行{attempt + 1}): {res.status_code}")
-            
-            if res.status_code == 200:
-                items = res.json().get('Items', [])
-                print(f"取得件数: {len(items)}件")
-                
-                for i in items:
-                    item = i['Item']
-                    item_name = item['itemName']
-                    
-                    if "スピーディ40" in item_name: continue
-                    if any(word in item_name for word in EXCLUDE_WORDS): continue
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0"
+    }
 
-                    msg = f"@everyone\n【楽天・新着】🔥本命スピーディ\n【品名】{item_name}\n【価格】{item['itemPrice']}円\n{item['itemUrl']}"
-                    send_discord(msg)
-                    break
-                return
-            elif res.status_code == 503:
-                time.sleep(2)  # 2秒待って再試行
-        except Exception as e:
-            print(f"通信エラー: {e}")
-            time.sleep(2)
+    try:
+        res = requests.get(rss_url, headers=headers, timeout=15)
+        print(f"楽天RSSステータス: {res.status_code}")
+        
+        if res.status_code != 200:
+            return
+
+        # XML解析
+        root = ET.fromstring(res.content)
+        items = root.findall(".//item")
+        print(f"取得件数: {len(items)}件")
+
+        for item in items:
+            title = item.find("title").text if item.find("title") is not None else ""
+            link = item.find("link").text if item.find("link") is not None else ""
+            description = item.find("description").text if item.find("description") is not None else ""
+
+            if any(word in title for word in EXCLUDE_WORDS):
+                continue
+
+            msg = f"@everyone\n【楽天・新着】🔥本命スピーディ\n【品名】{title}\n{link}"
+            send_discord(msg)
+            break
+
+    except Exception as e:
+        print(f"処理エラー: {e}")
 
 if __name__ == "__main__":
-    search_rakuten()
+    check_rakuten_rss()
