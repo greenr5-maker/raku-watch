@@ -24,6 +24,9 @@ def send_discord(msg):
 
 def search_rakuten():
     url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     params = {
         "applicationId": RAKUTEN_APP_ID,
         "keyword": TARGET["keyword"],
@@ -34,7 +37,7 @@ def search_rakuten():
         "format": "json"
     }
     try:
-        res = requests.get(url, params=params, timeout=10)
+        res = requests.get(url, params=params, headers=headers, timeout=10)
         print(f"楽天APIステータス: {res.status_code}")
         if res.status_code != 200:
             return
@@ -55,5 +58,4 @@ def search_rakuten():
         print(f"処理エラー: {e}")
 
 if __name__ == "__main__":
-    send_discord("【動作テスト】GitHub Actionsから直接送信しています！")
     search_rakuten()
