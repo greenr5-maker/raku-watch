@@ -21,14 +21,8 @@ def send_discord(msg):
         print(f"Discord送信エラー: {e}")
 
 def search_rakuten():
-    # 楽天市場の公式商品検索エンドポイント
-    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
-        "Referer": "https://search.rakuten.co.jp/",
-        "Origin": "https://search.rakuten.co.jp"
-    }
+    # 安定版エンドポイント（20170706）
+    url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
     
     params = {
         "applicationId": RAKUTEN_APP_ID,
@@ -41,7 +35,7 @@ def search_rakuten():
     }
 
     try:
-        res = requests.get(url, params=params, headers=headers, timeout=15)
+        res = requests.get(url, params=params, timeout=15)
         print(f"楽天APIステータス: {res.status_code}")
         
         if res.status_code != 200:
@@ -66,7 +60,7 @@ def search_rakuten():
 
             msg = f"@everyone\n【楽天・新着】🔥本命スピーディ\n【品名】{title}\n【価格】{price:,}円\n{item_url}"
             send_discord(msg)
-            print(f"新着をDiscordへ送信しました: {title[:20]}...")
+            print(f"Discordへ新着通知を送信しました: {title[:20]}...")
             break
 
     except Exception as e:
