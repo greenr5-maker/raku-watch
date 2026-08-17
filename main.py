@@ -1,3 +1,4 @@
+import time
 import requests
 
 RAKUTEN_APP_ID = "1068355966231154319"
@@ -25,37 +26,43 @@ def send_discord(msg):
 def search_rakuten():
     url = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20220601"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
     params = {
         "applicationId": RAKUTEN_APP_ID,
         "keyword": TARGET["keyword"],
         "minPrice": TARGET["minPrice"],
         "maxPrice": TARGET["maxPrice"],
-        "itemPurveyance": 1, 
         "sort": "+updateTimestamp",
         "format": "json"
     }
-    try:
-        res = requests.get(url, params=params, headers=headers, timeout=10)
-        print(f"楽天APIステータス: {res.status_code}")
-        if res.status_code != 200:
-            return
-        items = res.json().get('Items', [])
-        print(f"取得件数: {len(items)}件")
-        
-        for i in items:
-            item = i['Item']
-            item_name = item['itemName']
+    
+    # 503対策：最大3回まで再試行
+    for attempt in range(3):
+        try:
+            res = requests.get(url, params=params, headers=headers, timeout=10)
+            print(f"楽天APIステータス (試行{attempt + 1}): {res.status_code}")
             
-            if "スピーディ40" in item_name: continue
-            if any(word in item_name for word in EXCLUDE_WORDS): continue
+            if res.status_code == 200:
+                items = res.json().get('Items', [])
+                print(f"取得件数: {len(items)}件")
+                
+                for i in items:
+                    item = i['Item']
+                    item_name = item['itemName']
+                    
+                    if "スピーディ40" in item_name: continue
+                    if any(word in item_name for word in EXCLUDE_WORDS): continue
 
-            msg = f"@everyone\n【楽天・新着】🔥本命スピーディ\n【品名】{item_name}\n【価格】{item['itemPrice']}円\n{item['itemUrl']}"
-            send_discord(msg)
-            break
-    except Exception as e:
-        print(f"処理エラー: {e}")
+                    msg = f"@everyone\n【楽天・新着】🔥本命スピーディ\n【品名】{item_name}\n【価格】{item['itemPrice']}円\n{item['itemUrl']}"
+                    send_discord(msg)
+                    break
+                return
+            elif res.status_code == 503:
+                time.sleep(2)  # 2秒待って再試行
+        except Exception as e:
+            print(f"通信エラー: {e}")
+            time.sleep(2)
 
 if __name__ == "__main__":
     search_rakuten()
