@@ -2,21 +2,19 @@ name: Raku Watch Cron
 
 on:
   schedule:
-    - cron: '*/5 * * * *' # 5分ごとに自動チェック
-  workflow_dispatch: # 手動実行ボタン
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests beautifulsoup4
       - name: Run script
-        env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: python main.py
